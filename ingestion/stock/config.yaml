@@ -1,0 +1,28 @@
+# Stock ingestion configuration
+source:
+  type: vps_ssh
+  host: ${VPS_HOST}
+  port: ${VPS_PORT}
+  user: ${VPS_USER}
+  data_dir: ${VPS_DATA_DIR}
+
+target:
+  zone: bronze
+  prefix: bronze/stock
+
+channels:
+  - ticks
+  - index
+  - misc
+  - orderbook
+  - backfill
+
+exchanges:
+  - HOSE
+  - HNX
+  - UPCOM
+
+schedule:
+  # Chạy sau khi VPS processor + R2 upload xong (17:03)
+  cron: "30 17 * * 1-5"
+  timezone: Asia/Ho_Chi_Minh
