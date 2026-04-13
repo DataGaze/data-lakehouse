@@ -1,0 +1,10 @@
+commit	feature	status	notes
+TBD	F1:architecture	pass	214 lines, mermaid component diagram
+TBD	F2:runbook	pass	801 lines, 5 incident playbooks
+TBD	F3:data-contract	pass	569 lines, 15 tables Bronze/Silver/Gold
+TBD	F4:sla	pass	270 lines, 18 SLOs
+TBD	F5:security	pass	423 lines, 13 secrets inventory
+TBD	F6:cost	pass	220 lines, $54.54/month estimate
+TBD	F7:sequences	pass	3 files, 80 interactions total
+TBD	F8:onboarding+readme	pass	274 lines + README docs index
+TBD	Fix:consistency	pass	3 warnings fixed (CLAUDE env, README arch, broken link)

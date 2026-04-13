@@ -72,7 +72,8 @@ S3_BUCKET=lakehouse
 # PostgreSQL (Gold)
 PG_HOST=***
 PG_PORT=5432
-PG_DATABASE=stock_market
+PG_DATABASE=datagaze
+PG_SCHEMA=prod  # prod (production) / dbt_{user}_dev (per-dev)
 PG_USER=***
 PG_PASSWORD=***
 
