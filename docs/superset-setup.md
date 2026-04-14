@@ -5,22 +5,23 @@
 Apache Superset chạy native (không Docker) trên LXC 205 (`superset-signalhub`), kết nối tới PG Gold duy nhất.
 
 ```
-PG Gold (LXC 202, 100.79.83.42)
-    │ daily_ohlcv, ticks
+PG Gold (LXC 202, LAN 192.168.0.113)
+    │ daily_ohlcv (47K), ticks (82M)
     │
     ▼
-Superset (LXC 205, 192.168.0.116:8088)
+Superset (LXC 205, LAN 192.168.0.116:8088)
     │ Gunicorn + Celery + Redis
     │
-    ▼
-Browser / MCP Server (Claude tự tạo dashboard)
+    ├──▶ Browser (http://192.168.0.116:8088)
+    └──▶ MCP Server (Claude tự tạo dashboard)
 ```
 
 ## Thông tin kết nối
 
 | Item | Value |
 |------|-------|
-| URL | `http://192.168.0.116:8088` |
+| URL (LAN) | `http://192.168.0.116:8088` |
+| URL (Tailscale) | `http://100.104.77.58:8088` |
 | Admin | `admin` / (xem `/opt/superset/.credentials`) |
 | Config | `/opt/superset/superset_config.py` |
 | Venv | `/opt/superset/venv` |
@@ -78,8 +79,8 @@ Script nằm tại `scripts/install_superset.sh`. Chạy trên LXC 205:
 # Full install
 PG_GOLD_PASS=xxx bash /path/to/install_superset.sh
 
-# Override defaults
-PG_GOLD_PASS=xxx ADMIN_PASS=mypass PYTHON_VERSION=3.12.9 bash install_superset.sh
+# Override defaults (MUST use Python 3.11.x)
+PG_GOLD_PASS=xxx ADMIN_PASS=mypass bash install_superset.sh
 ```
 
 Script idempotent — chạy lại an toàn (skip bước đã hoàn thành).
@@ -134,3 +135,49 @@ export SUPERSET_CONFIG_PATH=/opt/superset/superset_config.py
 systemctl status redis-server
 systemctl restart redis-server
 ```
+
+### SQL Lab trả về "Results backend is not configured"
+
+Superset cần `RESULTS_BACKEND` cho async SQL Lab. Thêm vào `superset_config.py`:
+
+```python
+from cachelib.redis import RedisCache
+RESULTS_BACKEND = RedisCache(host="localhost", port=6379, db=4)
+```
+
+Restart: `systemctl restart superset-web superset-worker`
+
+### LXC 205 không reach PG Gold qua Tailscale
+
+LXC 205 không có Tailscale. Dùng LAN IP (`192.168.0.113`) thay vì Tailscale IP (`100.79.83.42`).
+
+## Vault Integration
+
+Credentials lưu tại Vault (LXC 200):
+
+```bash
+export VAULT_ADDR=https://100.64.176.104:8200
+export VAULT_SKIP_VERIFY=true
+vault login  # root token
+
+# Đọc
+vault kv get infra/superset
+
+# Cập nhật
+vault kv put infra/superset \
+    url=http://192.168.0.116:8088 \
+    admin_user=admin \
+    admin_pass=<password> \
+    pg_gold_host=192.168.0.113 \
+    pg_gold_pass=<password> \
+    meta_db_pass=<password>
+```
+
+## Known Constraints
+
+| Constraint | Chi tiết |
+|-----------|----------|
+| Python 3.11 only | Superset 4.x pins `numpy==1.23.5` — không tương thích Python 3.12+ |
+| `setuptools<75` | Superset dùng `pkg_resources` (removed trong setuptools 78+) |
+| Tailscale | LXC 205 Tailscale IP: `100.104.77.58` (hostname: `superset-signalhub`) |
+| 2 CPU / 6GB RAM | Đủ cho 1-2 users đồng thời, query ticks nên pre-aggregate |

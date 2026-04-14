@@ -34,10 +34,10 @@ Thêm vào `~/.claude/settings.json` (hoặc project settings):
 {
   "mcpServers": {
     "superset": {
-      "command": "python",
-      "args": ["/path/to/data-lakehouse/mcp/superset-mcp/server.py"],
+      "command": "python3",
+      "args": ["/Users/hoangnguyen/All_projects/DataGaze/data-lakehouse/mcp/superset-mcp/server.py"],
       "env": {
-        "SUPERSET_URL": "http://192.168.0.116:8088",
+        "SUPERSET_URL": "http://100.104.77.58:8088",
         "SUPERSET_USER": "admin",
         "SUPERSET_PASSWORD": "<from-vault>"
       }
@@ -45,6 +45,8 @@ Thêm vào `~/.claude/settings.json` (hoặc project settings):
   }
 }
 ```
+
+Đã cấu hình sẵn tại `DataGaze/.claude/settings.json`. MCP server sẽ tự start khi Claude Code mở trong DataGaze workspace.
 
 ## Available Tools
 
