@@ -58,7 +58,7 @@ install_system_deps() {
     log "System dependencies installed."
 }
 
-# ── Step 2: Build Python 3.12 ────────────────────────────────────
+# ── Step 2: Build Python 3.11 ────────────────────────────────────
 build_python() {
     if [[ -x "${PYTHON_PREFIX}/bin/python${PYTHON_MAJOR}" ]]; then
         log "Step 2/9: Python ${PYTHON_MAJOR} already at ${PYTHON_PREFIX} — skipping."
