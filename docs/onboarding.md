@@ -79,7 +79,7 @@ git clone git@github.com:DataGaze/stock-data-pipeline.git data-pipeline
 ### 4.2. Install dependencies
 
 ```bash
-cd ~/All_projects/DataGaze/data-pipeline
+cd ~/All_projects/BIZ01-datagaze/data-pipeline
 uv sync                        # Install tất cả deps từ pyproject.toml + lock file
 source .venv/bin/activate      # Hoặc dùng `uv run <cmd>` trực tiếp
 ```

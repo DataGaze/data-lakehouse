@@ -370,7 +370,7 @@ weed shell -master=localhost:9333 -filer=localhost:8888 -shell='s3.bucket.list'
 4. **Cập nhật file này** — update Current State sections
 5. **Git commit:**
    ```bash
-   cd ~/All_projects/DataGaze/data-lakehouse
+   cd ~/All_projects/BIZ01-datagaze/data-lakehouse
    git add docs/seaweedfs-ops.md
    git commit -m "ops(seaweedfs): <mô tả thay đổi> [M#.#]"
    ```
