@@ -63,23 +63,23 @@ Home lab scale nhỏ, solo dev, 50 MB/day — nhưng vẫn cần SLO vì:
 | SLI | Định nghĩa | Source |
 |-----|-----------|--------|
 | `dbt_test_pass_pct` | `passed / (passed + failed + error)` per run | dbt `run_results.json` |
-| `schema_drift_events` | Count of Polars schema mismatch / ngày | Prefect log |
+| `schema_drift_events` | Count of Polars schema mismatch / ngày | log của ETL run |
 | `duplicate_rate_pct` | `dup_rows / total_rows` per Silver partition | Polars dedup counter |
 
 ### 2.4 Availability (uptime)
 
 | SLI | Định nghĩa | Probe |
 |-----|-----------|-------|
-| `r2_availability_pct` | Successful HEAD / total HEAD per 5-min window | Prefect cron probe → R2 |
-| `postgres_availability_pct` | Successful `SELECT 1` / total probes | Prefect cron probe |
-| `prefect_api_availability_pct` | Prefect API `/api/health` 200 / total | External probe từ Mac mini |
+| `r2_availability_pct` | Successful HEAD / total HEAD per 5-min window | probe định kỳ → R2 |
+| `postgres_availability_pct` | Successful `SELECT 1` / total probes | probe định kỳ |
+| ~~`prefect_api_availability_pct`~~ | **Bỏ 2026-08-05** cùng Prefect — thay bằng SLI của Dagster khi dựng | — |
 
 ### 2.5 Latency (query)
 
 | SLI | Định nghĩa | Source |
 |-----|-----------|--------|
 | `gold_query_latency_p50/p95/p99` | Execution time của top 10 query patterns | Postgres `pg_stat_statements` |
-| `flow_duration_p95` | End-to-end Prefect flow (R2 → Gold) duration | Prefect flow_run logs |
+| `flow_duration_p95` | End-to-end pipeline run (R2 → Gold) duration | log của ETL run |
 
 ---
 
@@ -118,7 +118,7 @@ Rolling window: **30 ngày trailing**. Tất cả số dưới đây là target 
 |-----------|-----|------------------------|---------|
 | **R2** | **99.9%** | 43 min | CF quản lý, tin tưởng external SLA của họ. |
 | **Postgres (Gold)** | **99%** | 7.2h | Proxmox LXC 202, single node, không HA. Backup nightly. |
-| **Prefect API** | **99%** | 7.2h | LXC 201, single node. |
+| ~~**Prefect API**~~ | — | — | **Bỏ 2026-08-05** — không còn service trên LXC 201 |
 | **SeaweedFS** | **98%** | 14.4h | Home lab, ISP + điện có thể cúp. Có backup R2 làm fallback cho Bronze. |
 
 **Vì sao không 99.9% cho stack tự quản?** Solo ops, không có redundancy layer, ISP ở VN không SLA cho home. 99% = 7.2h/tháng ≈ một buổi tối debug/upgrade, thực tế đạt được.
@@ -211,7 +211,7 @@ Dựa trên [Google SRE burn rate](https://sre.google/workbook/alerting-on-slos/
 ### 6.3 No-alert (log only)
 
 - dbt test 1 failure, flaky — log, không page.
-- Prefect worker restart lẻ tẻ — log.
+- Tiến trình điều phối restart lẻ tẻ — log.
 
 ---
 
@@ -219,7 +219,7 @@ Dựa trên [Google SRE burn rate](https://sre.google/workbook/alerting-on-slos/
 
 | Cadence | Hoạt động |
 |---------|-----------|
-| **Weekly (Mon)** | Scan Prefect flow_run + dbt run_results, update budget log nếu có incident. |
+| **Weekly (Mon)** | Scan lịch sử ETL run + dbt run_results, update budget log nếu có incident. |
 | **Monthly (1st Mon)** | Review trailing 30d SLO attainment. Nếu 2 tháng liền miss → điều chỉnh SLO hoặc đầu tư infra. Nếu 3 tháng liền thừa > 30% budget → tighten SLO. |
 | **Quarterly** | Review SLA với consumer (MarketPulse owner = cùng người, self-review). Refresh version + status. |
 | **Ad-hoc** | Sau mỗi incident lớn (> 2h downtime): post-mortem + revisit SLO nếu cần. |
@@ -249,7 +249,7 @@ Dựa trên [Google SRE burn rate](https://sre.google/workbook/alerting-on-slos/
 
 ## Appendix A — SLO Dashboard Queries
 
-Query mẫu để compute SLO (sẽ implement trong Prefect reporting flow phase B4):
+Query mẫu để compute SLO (sẽ implement khi có tầng điều phối, phase B4):
 
 ```sql
 -- Gold freshness last 30 days
@@ -264,7 +264,7 @@ ORDER BY d DESC;
 
 ## Appendix B — References
 
-- ADR 2026-04-13: Platform Decisions (stack Prefect + Polars + dbt)
+- ADR 2026-04-13: Platform Decisions (stack Polars + dbt) — orchestration thay bởi ADR 2026-08-05 (Dagster)
 - [Google SRE Workbook — Alerting on SLOs](https://sre.google/workbook/alerting-on-slos/)
 - [The Art of SLOs — Google](https://sre.google/resources/practices-and-processes/art-of-slos/)
 - `docs/slo-budget-log.md` (TBD, phase B4)

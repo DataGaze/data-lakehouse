@@ -1,7 +1,7 @@
 # Data Lakehouse Platform
 
 > **Infra layer** cho DataGaze data platform — K3s manifests, Postgres DDL, SeaweedFS setup, Terraform/Ansible.
-> Runtime logic (Prefect flows, dbt models, Polars transforms) nằm ở repo `data-pipeline` (separate, per ADR D1).
+> Runtime logic (dbt models, Polars transforms, tầng điều phối) nằm ở repo `data-pipeline` (separate, per ADR D1).
 
 ## Architecture
 
@@ -19,7 +19,9 @@ SSI SignalR → WAL → Parquet ─▶  s3://lakehouse/ ────▶ Bronze (
                                               MarketPulse / Consumers
 ```
 
-**Orchestrator:** Prefect 3 (LXC 201). Ingestion path via R2 (ADR D3), không rsync trực tiếp bizfly.
+**Orchestrator:** chưa có. Prefect gỡ bỏ 2026-08-05 sau 4 tháng với 0 flow run; Dagster đang được
+dựng thay thế (xem [ADR 2026-08-05](docs/adr/2026-08-05-retire-prefect-adopt-dagster.md)).
+Tới khi Dagster chạy, ETL chỉ chạy khi gọi tay. Ingestion path via R2 (ADR D3), không rsync trực tiếp bizfly.
 
 ## Quick Start (infra provisioning)
 
@@ -75,8 +77,8 @@ docs/          FAANG-grade docs (xem bên dưới)
 ## Infrastructure
 
 - **K3s cluster:** 2 nodes (home lab)
-- **lakehouse-gold LXC 202** (Proxmox, 192.168.0.113): Postgres 16 Docker `postgres-gold` + Prefect worker
-- **prefect-server LXC 201** (192.168.0.112): Prefect orchestration
+- **lakehouse-gold LXC 202** (Proxmox, 192.168.0.113): Postgres 16 Docker `postgres-gold` (`prefect-worker` đã gỡ 2026-08-05)
+- **prefect-server LXC 201** (192.168.0.112): service đã ngừng, container giữ để tái dùng cho Dagster
 - **SeaweedFS:** S3-compatible object storage (Bronze + Silver)
 - **Cloudflare R2:** Durable archive + source of truth (ADR D3)
 - **Bizfly VPS:** Producer only (ssi-connection) — không consumer trực tiếp

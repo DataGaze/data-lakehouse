@@ -51,7 +51,7 @@ psql --version         # 15+
 Ping `@hoang` trên Telegram hoặc email với list bên dưới. Thường xử lý trong 1 ngày làm việc.
 
 - [ ] **GitHub DataGaze org membership** — để clone private repos (`data-lakehouse`, `data-pipeline`, `ssi-connection`...)
-- [ ] **Tailscale invite** — join tailnet `datagaze`, để reach LXC 201 (prefect-server) và LXC 202 (lakehouse-gold)
+- [ ] **Tailscale invite** — join tailnet `datagaze`, để reach LXC 202 (lakehouse-gold)
 - [ ] **R2 access credentials** — Cloudflare R2 bucket `lakehouse-bronze`, read-only cho dev, read-write cho prod flow
 - [ ] **Postgres dev schema permission** — grant `CREATE` trên schema `dbt_{your_username}_dev` trong database `datagaze`
 - [ ] **SOPS age key** — để decrypt `.env.dev.enc`. Gửi public key trước, nhận encrypted private key qua Signal
@@ -216,17 +216,18 @@ make etl-stock        # Chạy ETL: Bronze → Silver → Gold
 make test             # pytest full suite
 make validate         # Validate Bronze data integrity
 make check            # pytest + dbt test + mypy (gate trước deploy)
-make deploy ENV=prod  # Apply Prefect deployment lên prod
+# make deploy — chưa có tầng điều phối từ 2026-08-05; sẽ trỏ sang Dagster khi dựng
 ```
 
-### Prefect CLI (common)
+### Chạy pipeline (từ 2026-08-05)
+
+Prefect đã gỡ và Dagster chưa dựng, nên chưa có CLI điều phối. Chạy thẳng bằng CLI của
+`data-pipeline` ([ADR 2026-08-05](./adr/2026-08-05-retire-prefect-adopt-dagster.md)):
 
 ```bash
-prefect deployment ls                                  # List deployments
-prefect deployment run 'ingest-stock/prod'             # Trigger manual run
-prefect flow-run ls --limit 10                         # Last 10 runs
-prefect flow-run logs <flow-run-id>                    # View logs
-prefect worker start --pool default-agent-pool         # Start local worker
+python -m ingestion.r2_to_bronze --date 2026-08-04    # R2 → Bronze
+python -m etl.orchestrator --source stock             # Bronze → Silver → Gold
+python -m etl.orchestrator --source stock --step gold # chỉ một chặng
 ```
 
 ### dbt CLI (common)
@@ -259,7 +260,7 @@ psql $PG_URL -c "select 'prod' as src, count(*) from prod.daily_ohlc union all
 |-------|---------|
 | Infra, K3s, Proxmox, Tailscale | @hoang |
 | dbt models, Silver/Gold logic | @hoang |
-| Prefect flows, scheduling | @hoang |
+| Điều phối, scheduling | @hoang |
 | R2 credentials, SOPS keys | @hoang |
 | SSI source data questions | @hoang |
 | On-call rotation | @hoang |

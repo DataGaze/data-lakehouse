@@ -3,12 +3,22 @@
 | Field | Value |
 |-------|-------|
 | Owner | @hoangnguyen (Platform Lead) |
-| Last Updated | 2026-04-13 |
-| Version | 0.1.0 |
+| Last Updated | 2026-08-05 |
+| Version | 0.2.0 |
 | Status | Draft |
 | Applies to | `data-lakehouse` (infra), `data-pipeline` (runtime), `ssi-connection` (producer) |
 
 > Tài liệu này mô tả mô hình bảo mật cho data platform ở giai đoạn **solo-dev / home-lab → early SaaS**. Không claim compliance với SOC2/ISO27001/PCI-DSS. Mục tiêu: đạt mức *reasonable security hygiene* trước khi có user thật, và sẵn sàng siết chặt khi scale.
+
+> **Bề mặt Prefect đã biến mất (2026-08-05).** `prefect-server` (LXC 201) và `prefect-worker`
+> (LXC 202) stopped + disabled; xem [ADR 2026-08-05](./adr/2026-08-05-retire-prefect-adopt-dagster.md).
+> Hệ quả về an ninh, đã phản ánh trong tài liệu:
+>
+> - `PREFECT_API_KEY` (S-11) không còn tồn tại — bỏ khỏi lịch rotate.
+> - Cổng 4200 trên LXC 201 không còn service lắng nghe; ACL Tailscale `tag:prefect` giờ trỏ vào chỗ trống, nên **thu hồi được** khi rà soát ACL lần tới.
+> - Các mục §1.4, §4 (pattern Secret block), §5.4, §7.4 và mọi ràng buộc gắn với Prefect
+>   **không còn áp dụng**; giữ lại làm bản ghi cho tới khi Dagster dựng xong rồi viết lại
+>   theo bề mặt thật của nó (webserver, daemon, code location, Postgres metadata).
 
 ---
 
@@ -43,7 +53,7 @@ Liệt kê attack surfaces chính của platform kèm threat category STRIDE tư
 | **T**ampering | Analyst vô tình `DROP TABLE` ở prod schema | Analyst role `readonly` trên schema `prod`, chỉ `readwrite` trên `dbt_{user}_dev` |
 | **I**nformation disclosure | Connection string leak qua Prefect UI logs | Prefect block `Secret` mask giá trị, log scrubber loại env var nhạy cảm |
 
-### 1.4 Monitoring surface — `Telegram bot + Prefect alerts`
+### 1.4 Monitoring surface — `Telegram bot + Prefect alerts` [PHẦN PREFECT KHÔNG CÒN ÁP DỤNG]
 
 | Threat | Kịch bản | Mitigation |
 |--------|----------|------------|
@@ -58,7 +68,7 @@ Liệt kê attack surfaces chính của platform kèm threat category STRIDE tư
 |------|------------|----------------------|--------------|
 | **Public** | Thông tin đã công bố công khai | VN-Index values, close price niêm yết, mã cổ phiếu | Có thể cache bất cứ đâu, không cần encrypt at rest |
 | **Internal** | Derived / aggregated — không có IP nghiêm ngặt nhưng không nên publish | Silver daily aggregates, dbt gold models, custom signals | Postgres `prod` schema, access qua role `readonly`; backup encrypt |
-| **Confidential** | Credentials + secrets, leak = breach | SSI **ConsumerID**, SSI **ConsumerSecret**, R2 **access_key_id** + **secret_access_key**, Postgres **password** (prod + dev), **Telegram bot token**, Prefect API key, Tailscale auth key | SOPS-encrypted hoặc env var tại runtime, KHÔNG bao giờ trong git plaintext, rotate 90 ngày |
+| **Confidential** | Credentials + secrets, leak = breach | SSI **ConsumerID**, SSI **ConsumerSecret**, R2 **access_key_id** + **secret_access_key**, Postgres **password** (prod + dev), **Telegram bot token**, Tailscale auth key | SOPS-encrypted hoặc env var tại runtime, KHÔNG bao giờ trong git plaintext, rotate 90 ngày |
 | **PII** | Personally Identifiable Information | **Không có.** Stock market data không chứa PII. | N/A (giữ nguyên note này để reviewer biết đã xét) |
 
 > **Lưu ý future SaaS:** Khi thêm user accounts (email, billing), promote sang tier mới "PII-Regulated" với GDPR-like handling (§9).
@@ -75,13 +85,13 @@ Liệt kê đầy đủ secrets hiện đang dùng — audit cần biết **cái
 | S-02 | `SSI_CONSUMER_SECRET` | iboard.ssi.com.vn portal | bizfly `ssi-connection` | 90 ngày |
 | S-03 | `R2_ACCESS_KEY_ID` (producer) | Cloudflare R2 dashboard | bizfly `ssi-connection` uploader | 90 ngày |
 | S-04 | `R2_SECRET_ACCESS_KEY` (producer) | Cloudflare R2 dashboard | bizfly | 90 ngày |
-| S-05 | `R2_ACCESS_KEY_ID` (consumer) | Cloudflare R2 dashboard | LXC 202 `lakehouse-gold` Prefect worker | 90 ngày |
+| S-05 | `R2_ACCESS_KEY_ID` (consumer) | Cloudflare R2 dashboard | LXC 202 `lakehouse-gold` (ETL run) | 90 ngày |
 | S-06 | `R2_SECRET_ACCESS_KEY` (consumer) | Cloudflare R2 dashboard | LXC 202 | 90 ngày |
 | S-07 | `PG_PASSWORD_ADMIN` | Postgres `CREATE ROLE` | DBA only, migrations | 90 ngày |
-| S-08 | `PG_PASSWORD_READWRITE` | Postgres | Prefect worker flows | 90 ngày |
+| S-08 | `PG_PASSWORD_READWRITE` | Postgres | ETL run (Bronze → Silver → Gold) | 90 ngày |
 | S-09 | `PG_PASSWORD_READONLY` | Postgres | Analyst dbt dev, dashboard read | 180 ngày |
-| S-10 | `TELEGRAM_BOT_TOKEN` | @BotFather | `MarketPulse`, Prefect alert block | 90 ngày |
-| S-11 | `PREFECT_API_KEY` | Prefect server UI | `make deploy`, worker | 90 ngày |
+| S-10 | `TELEGRAM_BOT_TOKEN` | @BotFather | `MarketPulse`, ETL alert | 90 ngày |
+| ~~S-11~~ | ~~`PREFECT_API_KEY`~~ | — | **Đã bỏ 2026-08-05** cùng Prefect; không còn gì phải rotate. Secret của Dagster sẽ thêm khi dựng | — |
 | S-12 | `TAILSCALE_AUTHKEY` | admin console | node bootstrap only (one-shot) | Per-use, ephemeral |
 | S-13 | `SEAWEEDFS_S3_ACCESS/SECRET` | SeaweedFS `weed.toml` | ETL workloads | 90 ngày |
 
@@ -199,10 +209,10 @@ Database: `datagaze` (xem ADR D6).
 | Role | Grants | Thành viên |
 |------|--------|-----------|
 | `datagaze_admin` | ALL on DATABASE datagaze | DBA (platform lead) only |
-| `datagaze_prod_rw` | USAGE + CRUD on schema `prod` | Prefect worker (LXC 202) |
+| `datagaze_prod_rw` | USAGE + CRUD on schema `prod` | ETL run trên LXC 202 |
 | `datagaze_prod_ro` | USAGE + SELECT on schema `prod` | Analyst tools, dashboard API, `MarketPulse` |
 | `datagaze_dev_rw` | ALL on schema `dbt_*_dev` | Local dev per-user |
-| `prefect_meta_rw` | CRUD on schema `prefect` (Prefect meta) | Prefect server only |
+| ~~`prefect_meta_rw`~~ | ~~CRUD on schema `prefect`~~ | **Bỏ 2026-08-05** — Prefect dùng SQLite, role này chưa từng được tạo |
 
 **Bootstrap DDL** (living reference — actual DDL trong `migrations/`):
 
@@ -238,7 +248,7 @@ Tokens scope qua Cloudflare R2 token config, không dựa trên IAM policy JSON 
 - Mac mini, LXC 201/202, bizfly VPS đều vào Tailnet → SSH qua `tsh` hoặc `ssh user@<tailnet-hostname>`.
 - Bizfly giữ port 2222 public (legacy, dùng key auth) vì cron 24/7 không phụ thuộc Tailscale availability. Kế hoạch: chuyển hẳn sang Tailscale khi stable → đóng port 2222 ra internet.
 
-### 5.4 Prefect UI / API
+### 5.4 Prefect UI / API [KHÔNG CÒN — service đã gỡ 2026-08-05]
 
 - Prefect server bind `0.0.0.0` trong Tailnet, **không** expose ra public internet
 - API key (S-11) required cho mọi write operation
@@ -286,7 +296,7 @@ Topology:
 
 | LXC | Port | Source | Purpose |
 |-----|------|--------|---------|
-| 201 prefect-server | 4200/tcp | Tailnet only | Prefect API |
+| 201 prefect-server | ~~4200/tcp~~ | — | **Không còn service lắng nghe** (gỡ 2026-08-05) |
 | 202 lakehouse-gold | 5432/tcp | Tailnet only | Postgres |
 | 202 lakehouse-gold | 30333/tcp | Tailnet only | SeaweedFS S3 |
 
@@ -321,7 +331,7 @@ Public internet: **zero inbound ports** trên LXC. Bizfly giữ 2222 (legacy, xe
 - **Signed commits (GPG/SSH signature): optional hiện tại, required khi onboard contributor thứ 2**
 - `secrets/**/*.enc.yaml` là file duy nhất chứa ciphertext → `git log --all -- secrets/` liệt kê mọi lần rotate
 
-### 7.4 Prefect Run Audit
+### 7.4 Prefect Run Audit [KHÔNG CÒN — viết lại khi Dagster chạy]
 
 - Mọi flow run có run_id, start/end timestamp, trigger source (manual vs schedule)
 - Retention 90 ngày trong Prefect DB; export JSON snapshot sang Bronze cho audit dài hạn (future)

@@ -4,7 +4,7 @@
 
 ## Overview
 
-Khi R2 không reachable tại thời điểm Prefect pull (17:30 ICT), flow retry với exponential backoff, fail soft sau 3 lần, alert operator. Operator quyết định wait-out hoặc fallback sang rsync trực tiếp từ bizfly. Post-incident verify data completeness.
+Khi R2 không reachable tại thời điểm pull (17:30 ICT), flow retry với exponential backoff, fail soft sau 3 lần, alert operator. Operator quyết định wait-out hoặc fallback sang rsync trực tiếp từ bizfly. Post-incident verify data completeness.
 
 ## Sequence
 
@@ -12,7 +12,7 @@ Khi R2 không reachable tại thời điểm Prefect pull (17:30 ICT), flow retr
 sequenceDiagram
     autonumber
     actor Op as Operator
-    participant PF as Prefect Server<br/>(LXC 201)
+    participant PF as Điều phối<br/>(Dagster — chưa dựng)
     participant LH as lakehouse-gold<br/>(LXC 202, worker)
     participant R2 as Cloudflare R2
     participant Biz as Bizfly VPS<br/>(ssi-connection, fallback)
@@ -46,7 +46,7 @@ sequenceDiagram
     CF-->>Op: "R2 Storage — degraded performance (APAC)"
 
     alt Wait strategy (ETA < 30min)
-        Op->>PF: Manual retry after 20min<br/>prefect deployment run ingest_daily
+        Op->>PF: Manual retry after 20min<br/>chạy lại pipeline cho ngày đó
         PF->>LH: Re-dispatch flow
         LH->>R2: LIST (R2 recovered)
         R2-->>LH: 200 OK, object list
@@ -54,7 +54,7 @@ sequenceDiagram
     else Fallback strategy (ETA > 30min or unknown)
         Op->>Biz: ssh bizfly<br/>verify /home/trongnq/Projects/SSI_Conection/data/export/2026-04-13/ exists
         Biz-->>Op: Parquet files present (15 files, 478 MB)
-        Op->>LH: ssh lakehouse-gold<br/>trigger emergency flow:<br/>prefect deployment run ingest_daily_fallback<br/>--param source=rsync --param date=2026-04-13
+        Op->>LH: ssh lakehouse-gold<br/>trigger fallback rsync:<br/>python -m ingestion.rsync_bizfly --date 2026-04-13
         LH->>Biz: rsync -avz bizfly:~/SSI_Conection/data/export/2026-04-13/ /tmp/bronze_staging/
         Biz-->>LH: Parquet files transferred
         LH->>LH: Bronze→Silver→Gold (same transforms)
@@ -78,7 +78,7 @@ sequenceDiagram
   - Detection: T0 = 17:30 ICT (flow start), alert gửi lúc T0+~4m (sau 3 retries)
   - Acknowledge: trong 10 phút (operator on-call)
   - Resolution target: trước 20:00 ICT để MarketPulse catch up cùng ngày
-- **Retry policy**: Prefect task `retries=3, retry_delay_seconds=[30, 60, 120]` (exponential, capped). Không retry với lỗi 4xx (client error — fail fast).
+- **Retry policy** (mục tiêu, khai ở tầng Dagster): 3 lần, delay [30, 60, 120] giây (exponential, capped). Không retry với lỗi 4xx (client error — fail fast).
 - **Decision criteria wait vs fallback**:
   - Wait: CF status báo ETA recovery < 30 phút, < 15:00 UTC của cùng ngày
   - Fallback rsync: ETA > 30 phút, hoặc status không rõ, hoặc đã 19:00 ICT

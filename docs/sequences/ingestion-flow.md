@@ -15,7 +15,7 @@ sequenceDiagram
     participant SSI as SSI FastConnect<br/>(SignalR API)
     participant Biz as Bizfly VPS<br/>(ssi-connection)
     participant R2 as Cloudflare R2<br/>(SoT bucket)
-    participant PF as Prefect Server<br/>(LXC 201)
+    participant PF as Điều phối<br/>(Dagster — chưa dựng)
     participant LH as lakehouse-gold<br/>(LXC 202, worker)
     participant PG as Postgres<br/>(Gold, schema=prod)
     participant MP as MarketPulse<br/>(Mac mini)
@@ -33,7 +33,7 @@ sequenceDiagram
     R2-->>Biz: 200 OK (ETag)
     Biz->>Biz: Mark WAL as shipped (local cleanup T+2)
 
-    Note over PF,LH: 17:30 — Prefect deployment trigger
+    Note over PF,LH: 17:30 — trigger theo lịch (mục tiêu)
     PF->>LH: Dispatch flow run (ingest_daily, date=2026-04-13)
     LH->>R2: LIST bronze/stock/2026-04-13/**
     R2-->>LH: Object list (15 files, ~480 MB)
@@ -62,13 +62,13 @@ sequenceDiagram
 
 - **Timing SLA**:
   - 17:03 ICT: R2 upload complete (bizfly cron, ssi-connection ADR-011)
-  - 17:30 ICT: Prefect flow triggered (deployment `ingest_daily`)
+  - 17:30 ICT: pipeline được trigger theo lịch (mục tiêu — hiện chạy tay)
   - 17:55 ICT: Gold tables ready (dbt run + test finish)
   - 18:00 ICT: MarketPulse report delivered
 - **Idempotency**: Bronze uses R2 object key as natural dedup; Gold uses `ON CONFLICT (date, symbol, channel) DO UPDATE` theo ADR D3/D6.
 - **Retention**: Bronze/Silver indefinite trên SeaweedFS; WAL trên bizfly T+2 ngày.
 - **Failure modes**:
-  - R2 timeout at step 14 → retry 3x exponential backoff → Prefect state=Failed → xem `incident-r2-down.md`
+  - R2 timeout at step 14 → retry 3x exponential backoff → run state=Failed → xem `incident-r2-down.md`
   - Silver dedup drift > 5% → dbt test fail → flow fail + Telegram alert (không ghi Gold)
   - MarketPulse miss data → alert ở 18:05 nếu Gold rows < expected threshold
-- **References**: ADR-2026-04-13 (D3 ingestion path, D4 Prefect+Polars+dbt), `data-lakehouse/CLAUDE.md` (quality gates), `ssi-connection` ADR-011 (R2 as SoT).
+- **References**: ADR-2026-04-13 (D3 ingestion path, D4 Polars+dbt; orchestration → ADR 2026-08-05 Dagster), `data-lakehouse/CLAUDE.md` (quality gates), `ssi-connection` ADR-011 (R2 as SoT).

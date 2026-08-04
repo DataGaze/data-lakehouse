@@ -1,7 +1,12 @@
 # ADR — Data Platform Decisions (2026-04-13)
 
 ## Status
-Accepted
+
+Accepted (2026-04-13). Phần orchestration được thay thế bởi
+[ADR 2026-08-05 — Gỡ Prefect, chuyển sang Dagster](./2026-08-05-retire-prefect-adopt-dagster.md).
+
+Mọi nhắc tới Prefect trong tài liệu này là bản ghi của quyết định tại thời điểm 2026-04-13,
+giữ nguyên có chủ đích. Đừng đọc chúng như mô tả hệ thống hiện tại.
 
 ## Context
 DataGaze bắt đầu mở rộng từ chỉ stock sang multi-domain (stock + BĐS + future). Cần chốt kiến trúc data platform để tránh drift + tech debt từ sớm.
@@ -21,10 +26,15 @@ DataGaze bắt đầu mở rộng từ chỉ stock sang multi-domain (stock + B�
 - Flow: `bizfly cron 17:03 upload → R2` → `lakehouse-gold Prefect 17:30 pull từ R2 → Bronze → Silver → Gold`.
 
 ### D4. Orchestration + transform stack
-- **Prefect 3**: orchestration (đã deploy LXC 201 prefect-server, worker LXC 202)
+
+> **Phần orchestration đã bị thay thế** bởi [ADR 2026-08-05](./2026-08-05-retire-prefect-adopt-dagster.md):
+> Prefect gỡ bỏ sau khi chạy 4 tháng với 0 deployment và 0 flow run; chuyển sang Dagster.
+> Phần Polars và dbt dưới đây vẫn có hiệu lực.
+
+- ~~**Prefect 3**: orchestration (đã deploy LXC 201 prefect-server, worker LXC 202)~~
 - **Polars**: Bronze → Silver (Parquet transform)
 - **dbt**: Silver → Gold (SQL transformations trên Postgres)
-- Pattern: `Prefect flow: Polars Bronze→Silver → dbt run Silver→Gold`
+- Pattern: `Polars Bronze→Silver → dbt run Silver→Gold`, do tầng điều phối gọi
 
 ### D5. Env separation (2 envs: dev + prod)
 - **Không** tách folder prod/dev. Dùng config-per-env (industry standard Y).

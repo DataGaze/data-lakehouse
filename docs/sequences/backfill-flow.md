@@ -13,7 +13,7 @@ sequenceDiagram
     autonumber
     actor Op as Operator
     participant MP as MarketPulse<br/>(gap detector)
-    participant PF as Prefect Server<br/>(LXC 201)
+    participant PF as Điều phối<br/>(Dagster — chưa dựng)
     participant LH as lakehouse-gold<br/>(LXC 202, worker)
     participant R2 as Cloudflare R2<br/>(SoT bucket)
     participant PG as Postgres<br/>(Gold, schema=prod)
@@ -26,7 +26,7 @@ sequenceDiagram
     TG-->>Op: Notify
 
     Note over Op,PF: Manual trigger via SSH
-    Op->>PF: ssh prefect@LXC-201<br/>prefect deployment run ingest_daily<br/>--param date=2026-04-11 --param mode=backfill
+    Op->>PF: chạy backfill cho ngày 2026-04-11<br/>(Dagster: backfill theo partition)
     PF-->>Op: Flow run scheduled (id=abc-123)
     PF->>LH: Dispatch flow run (date=2026-04-11, mode=backfill)
 

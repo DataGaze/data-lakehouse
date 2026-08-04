@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Owner** | Data Platform (trongnq / hoangnguyen) |
-| **Last Updated** | 2026-04-13 |
+| **Last Updated** | 2026-08-05 |
 | **Version** | 0.1.0 |
 | **Status** | Draft |
 | **On-call primary** | @trongnq (Telegram) |
@@ -12,6 +12,17 @@
 | **Escalation** | Telegram @trongnq → call → email (xem §8) |
 
 > Runbook này cover DataGaze data platform: từ ingestion trên Bizfly VPS, qua R2, đến lakehouse Gold trên Proxmox LXC. Đọc cùng `docs/adr/2026-04-13-platform-decisions.md` (kiến trúc) và `ssi-connection/docs/06-OPERATIONS.md` (ingestion chi tiết).
+
+> ## [KHÔNG CÒN HIỆU LỰC] Mọi thủ tục liên quan Prefect — 2026-08-05
+>
+> Prefect đã gỡ khỏi hệ thống: `prefect-server` (LXC 201) và `prefect-worker` (LXC 202)
+> đều stopped + disabled sau 4 tháng chạy với 0 deployment và 0 flow run. Các mục §1.2,
+> §2.1, §2.2, §2.4 và mọi lệnh `prefect ...` trong tài liệu này **không chạy được nữa** —
+> đừng làm theo. Chúng được giữ lại làm bản ghi, sẽ viết lại khi Dagster chạy thật.
+>
+> Trong giai đoạn chuyển tiếp: **không có scheduler nào đang chạy**, ETL chỉ chạy khi gọi
+> tay bằng CLI của `data-pipeline`. Chi tiết quyết định:
+> [ADR 2026-08-05](./adr/2026-08-05-retire-prefect-adopt-dagster.md).
 
 ---
 
@@ -44,7 +55,7 @@
 
 Data sau 17:03 đã on R2 bucket `vn-stock-lake` ở prefix `{YYYY}/{MM}/{DD}/{channel}/{exchange}.parquet`.
 
-### 1.2 Prefect Server — LXC 201
+### 1.2 Prefect Server — LXC 201 [ĐÃ GỠ 2026-08-05]
 
 | Attribute | Value |
 |---|---|
@@ -61,27 +72,27 @@ Data sau 17:03 đã on R2 bucket `vn-stock-lake` ở prefix `{YYYY}/{MM}/{DD}/{c
 
 | Attribute | Value |
 |---|---|
-| **Role** | Bronze download + Silver transform + Gold warehouse + Prefect worker |
+| **Role** | Bronze download + Silver transform + Gold warehouse |
 | **Host** | Proxmox LXC 202 (renamed từ `stock-gold`) |
 | **IP** | `192.168.0.113` |
 | **OS** | Ubuntu 24.04 LTS |
 | **Postgres** | Docker container `postgres-gold`, image `postgres:16`, port `5432` |
 | **Database** | `datagaze` (schema `prod`, `dbt_{user}_dev`) |
-| **Prefect worker** | `prefect-worker.service` (systemd), pool `lakehouse-gold-pool` |
+| ~~**Prefect worker**~~ | `prefect-worker.service` stopped + disabled 2026-08-05 (venv `/opt/prefect/` còn trên đĩa, xóa được) |
 | **Data dirs** | `/var/lib/docker/volumes/pg_gold_data/_data` (PG), `/opt/lakehouse/bronze`, `/opt/lakehouse/silver` |
 | **dbt project** | `/opt/data-pipeline/dbt` |
 
-**Daily flow** (Mon–Fri 17:30):
-1. Prefect flow `r2_to_bronze` kéo Parquet từ R2 về `/opt/lakehouse/bronze/{date}/`
+**Daily flow** (Mon–Fri 17:30 — *mục tiêu*; từ 2026-08-05 chưa có scheduler, chỉ chạy khi gọi tay):
+1. `r2_to_bronze` kéo Parquet từ R2 về `/opt/lakehouse/bronze/{date}/`
 2. Polars transform Bronze → Silver (`/opt/lakehouse/silver/{date}/`)
 3. `dbt run --target prod` load Silver → schema `prod` trong Postgres
-4. `dbt test` — fail thì flow fail + Telegram alert
+4. `dbt test` — fail thì run fail + Telegram alert
 
 ---
 
 ## 2. Common Operations
 
-### 2.1 Restart Prefect worker (LXC 202)
+### 2.1 Restart Prefect worker (LXC 202) [KHÔNG CÒN HIỆU LỰC — service đã gỡ]
 
 ```bash
 # SSH vào lakehouse-gold
@@ -107,7 +118,7 @@ curl -sv http://192.168.0.112:4200/api/health
 # Expect: HTTP/1.1 200 OK với {"status": "healthy"}
 ```
 
-### 2.2 Restart Prefect Server (LXC 201)
+### 2.2 Restart Prefect Server (LXC 201) [KHÔNG CÒN HIỆU LỰC — service đã gỡ]
 
 ```bash
 ssh prefect-server   # alias → root@192.168.0.112
@@ -153,7 +164,7 @@ docker exec postgres-gold psql -U postgres -d datagaze -c "
 SELECT pg_size_pretty(pg_database_size('datagaze')) AS size;"
 ```
 
-### 2.4 Trigger manual R2 → Bronze backfill flow
+### 2.4 Trigger manual R2 → Bronze backfill flow [LỆNH PREFECT KHÔNG CHẠY ĐƯỢC — xem ghi chú đầu file]
 
 Trigger qua Prefect UI hoặc CLI từ LXC 202:
 
@@ -369,7 +380,7 @@ python3 app/scripts/r2_uploader.py --date 2026-04-10
 # Credentials lỗi → rotate (§2.5.1)
 ```
 
-### 4.3 Prefect flow failed 3x
+### 4.3 Prefect flow failed 3x [KHÔNG CÒN HIỆU LỰC — viết lại khi Dagster chạy]
 
 **Symptom**
 - Telegram 🔴 `Flow r2-to-bronze failed 3 consecutive runs`

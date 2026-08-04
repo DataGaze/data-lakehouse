@@ -257,7 +257,7 @@ Path: `bronze/stock/{date}/backfill/{exchange}_1min.parquet` (chỉ tồn tại 
 ### 2.3 Gold Layer — PostgreSQL
 
 **Database:** `datagaze` (đổi từ `stock_market`, theo ADR §D6).
-**Schema:** `prod` (Prefect production), `dbt_{user}_dev` (developer local).
+**Schema:** `prod` (production), `dbt_{user}_dev` (developer local).
 **Host:** LXC 202 `lakehouse-gold`.
 
 **Charset:** `UTF8`. **Timezone:** server `UTC`; column timestamp luôn là `TIMESTAMPTZ`.
@@ -393,7 +393,7 @@ Signals AI/quant sinh ra từ Gold data.
 | Silver = đổi tên chuẩn hóa | thêm suffix đơn vị | `last_price_vnd` |
 | Gold | theo Silver | |
 | dbt model file | `{layer}_{entity}.sql` | `silver_ticks.sql`, `gold_daily_ohlcv.sql` |
-| Prefect flow | `{action}_{source}_to_{target}` | `ingest_r2_to_bronze`, `transform_bronze_to_silver` |
+| Pipeline step | `{action}_{source}_to_{target}` | `ingest_r2_to_bronze`, `transform_bronze_to_silver` |
 
 **Không dùng:** reserved words Postgres (`user`, `order`, `table`), viết tắt không chuẩn (`qty` OK, `qtty` legacy giữ lại — sẽ deprecate ở v2).
 
@@ -504,7 +504,7 @@ dbt `source freshness` check chạy đầu flow; fail → Telegram alert, flow a
 
 | Aspect | Commitment |
 |---|---|
-| Producer | `data-pipeline` Prefect flow `transform_silver_to_gold` (dbt run + test) |
+| Producer | `data-pipeline`, bước `transform_silver_to_gold` (dbt run + test) |
 | Storage | Postgres `datagaze.prod.*` |
 | Access | Read-only role `datagaze_reader` cho MarketPulse; write role chỉ dbt user dùng |
 | Schema stability | Gold là public API; breaking change follow §5 (14 ngày dual-publish) |
