@@ -296,7 +296,6 @@ Topology:
 
 | LXC | Port | Source | Purpose |
 |-----|------|--------|---------|
-| 201 prefect-server | ~~4200/tcp~~ | — | **Không còn service lắng nghe** (gỡ 2026-08-05) |
 | 202 lakehouse-gold | 5432/tcp | Tailnet only | Postgres |
 | 202 lakehouse-gold | 30333/tcp | Tailnet only | SeaweedFS S3 |
 

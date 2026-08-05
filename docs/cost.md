@@ -61,10 +61,12 @@ Pricing công khai Cloudflare (2026 standard tier):
 
 | LXC    | Role             | vCPU | RAM  | Disk   | Ước TDP share |
 |--------|------------------|------|------|--------|---------------|
-| 201    | prefect-server   | 0.5  | 1GB  | 20GB   | ~5W (service đã gỡ 2026-08-05; điện năng trả lại khi destroy container) |
 | 202    | lakehouse-gold   | 8    | 8GB  | 200GB  | ~40W          |
 | other  | Proxmox overhead | —    | —    | —      | ~20W          |
-| **Total** |               |      |      |        | **~65W avg**  |
+| **Total** |               |      |      |        | **~60W avg**  |
+
+LXC 201 (`prefect-server`, ~5W) đã xóa hẳn khỏi Proxmox ngày 2026-08-05 — phần điện năng đó
+đã trả lại, không còn tính trong tổng.
 
 **Điện**:
 - 65W × 24h × 30d = 46.8 kWh/tháng

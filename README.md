@@ -78,7 +78,6 @@ docs/          FAANG-grade docs (xem bên dưới)
 
 - **K3s cluster:** 2 nodes (home lab)
 - **lakehouse-gold LXC 202** (Proxmox, 192.168.0.113): Postgres 16 Docker `postgres-gold` (`prefect-worker` đã gỡ 2026-08-05)
-- **prefect-server LXC 201** (192.168.0.112): service đã ngừng, container giữ để tái dùng cho Dagster
 - **SeaweedFS:** S3-compatible object storage (Bronze + Silver)
 - **Cloudflare R2:** Durable archive + source of truth (ADR D3)
 - **Bizfly VPS:** Producer only (ssi-connection) — không consumer trực tiếp

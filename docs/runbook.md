@@ -15,8 +15,10 @@
 
 > ## [KHÔNG CÒN HIỆU LỰC] Mọi thủ tục liên quan Prefect — 2026-08-05
 >
-> Prefect đã gỡ khỏi hệ thống: `prefect-server` (LXC 201) và `prefect-worker` (LXC 202)
-> đều stopped + disabled sau 4 tháng chạy với 0 deployment và 0 flow run. Các mục §1.2,
+> Prefect đã gỡ khỏi hệ thống: `prefect-worker` (LXC 202) stopped + disabled, còn **LXC 201
+> `prefect-server` đã xóa hẳn khỏi Proxmox** — container, đĩa và cấu hình đều không còn, IP
+> `192.168.0.112` / `100.118.137.119` không trỏ tới đâu. Cả hai chạy 4 tháng với 0 deployment
+> và 0 flow run. Các mục §1.2,
 > §2.1, §2.2, §2.4 và mọi lệnh `prefect ...` trong tài liệu này **không chạy được nữa** —
 > đừng làm theo. Chúng được giữ lại làm bản ghi, sẽ viết lại khi Dagster chạy thật.
 >
