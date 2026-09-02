@@ -85,11 +85,15 @@
 | `seaweedfs-master.service` | `weed master -port=9333 -mdir=/mnt/hdd/seaweedfs/m9333 -defaultReplication=000` | `network.target` |
 | `seaweedfs-volume-hdd.service` | `weed volume -port=8080 -mserver=localhost:9333 -dir=/mnt/hdd/seaweedfs -max=100 -disk=hdd -dataCenter=dc1 -rack=hdd` | `seaweedfs-master` |
 | `seaweedfs-volume-ssd.service` | `weed volume -port=8081 -mserver=localhost:9333 -dir=/data/seaweedfs-ssd -max=50 -disk=ssd -dataCenter=dc1 -rack=ssd` | `seaweedfs-master` |
-| `seaweedfs-filer.service` | `weed filer -master=localhost:9333 -port=8888 -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/config.json` | `seaweedfs-master` |
+| `seaweedfs-filer.service` | `weed filer -ip=192.168.0.200 -master=localhost:9333 -port=8888 -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/config.json` | `seaweedfs-master` |
 
 **Boot order:** master → volume-hdd + volume-ssd → filer (systemd `Requires` + `After`)
 
 All units: `Restart=always`, `RestartSec=5`, `LimitNOFILE=65536`
+
+`-ip=192.168.0.200` on the filer is mandatory (added 2026-09-03): without it `weed` picks the first non-loopback
+address at start, and after one restart it bound filer and S3 to the Tailscale IP `100.89.161.125` instead of the LAN
+IP, so every LAN client got TCP RST on `:8333`. Master and volume servers already advertise `192.168.0.200`.
 
 ### Config Files
 
@@ -97,6 +101,17 @@ All units: `Restart=always`, `RestartSec=5`, `LimitNOFILE=65536`
 |------|---------|
 | `/etc/seaweedfs/filer.toml` | Filer metadata backend (LevelDB2 at `/mnt/hdd/seaweedfs/filerldb2`) |
 | `/etc/seaweedfs/config.json` | S3 identity & access control |
+
+### Firewall (iptables, persisted by `netfilter-persistent` in `/etc/iptables/rules.v4`)
+
+| Port | Allowed sources | Note |
+|------|-----------------|------|
+| 8333 (S3) | `127.0.0.1`, `192.168.0.200`, `192.168.0.0/24` | LAN subnet added 2026-09-03 for Mac mini rclone (`learning-hub`); S3 API is credentialed |
+| 8888 (filer HTTP), 9333 (master) | `127.0.0.1`, `192.168.0.200` | Unauthenticated, keep host-only |
+| 8080, 8081 (volume) | `127.0.0.1`, `192.168.0.200` | Host-only |
+| Any port via `tailscale0` | Tailscale peers | Accepted by the `ts-input` chain before the rules above |
+
+Change a rule with `iptables -I INPUT <n> ...` then `iptables-save > /etc/iptables/rules.v4`; PVE firewall is disabled.
 
 ### Deprecated
 
@@ -129,6 +144,7 @@ All units: `Restart=always`, `RestartSec=5`, `LimitNOFILE=65536`
 | `crawl-gov` | Government & corporate | crawl pipeline | 2026-04-14 | Active | chinhphu.vn, sbv.gov.vn, HOSE/HNX announcements, IR pages |
 | `crawl-bds` | Real estate | bds-data | 2026-04-14 | Active | batdongsan, chotot, alonhadat listings |
 | `marketpulse` | Analytics & reports | MarketPulse | 2026-04-14 | Active | Aggregated reports, analysis output |
+| `learning-hub` | Learning Hub (BIZ03-edtech-vn) | learning-hub | 2026-09-03 | Active | TOEIC source (`toeic-pred/`), R2 media mirror (`media/`), `toeic-listening-pack/`, D1 exports (`backups/`). Own layout, no bronze/silver; whole bucket on HDD |
 
 ### Bucket Internal Structure
 
@@ -161,6 +177,7 @@ Configured via `fs.configure`. Rules are persisted in filer metadata — survive
 | 8 | `/buckets/crawl-bds/silver` | ssd | 2026-04-14 |
 | 9 | `/buckets/marketpulse/bronze` | hdd | 2026-04-14 |
 | 10 | `/buckets/marketpulse/silver` | ssd | 2026-04-14 |
+| 11 | `/buckets/learning-hub` | hdd | 2026-09-03 |
 
 **Verification:** Write to `crawl-news/bronze/test.txt` → volume 22 (HDD :8080). Write to `crawl-news/silver/test.txt` → volume 33 (SSD :8081). Confirmed 2026-04-14.
 
@@ -171,6 +188,7 @@ Defined in `/etc/seaweedfs/config.json`.
 | # | Identity | Access Scope | Actions | Purpose |
 |---|----------|-------------|---------|---------|
 | 1 | `admin` | All buckets | Admin, Read, Write, List, Tagging | Super admin — ops only, do not share |
+| 2 | `learning-hub` | `learning-hub` only | Read, Write, List, Tagging (bucket-scoped) | rclone remote `lh` on Mac mini (`~/.config/rclone/rclone.conf`, `no_check_bucket = true` because HeadBucket is denied for scoped identities). Added 2026-09-03; Vault entry `infra/seaweedfs/learning-hub` pending (Vault sealed that day) |
 
 > **TODO:** Create per-project identities with scoped permissions:
 > - `stock-pipeline` → Read/Write `stock-data` only
@@ -370,7 +388,7 @@ weed shell -master=localhost:9333 -filer=localhost:8888 -shell='s3.bucket.list'
 4. **Cập nhật file này** — update Current State sections
 5. **Git commit:**
    ```bash
-   cd ~/All_projects/BIZ01-datagaze/data-lakehouse
+   cd ~/All_projects/DATA02-lakehouse
    git add docs/seaweedfs-ops.md
    git commit -m "ops(seaweedfs): <mô tả thay đổi> [M#.#]"
    ```
@@ -394,6 +412,32 @@ Format: `YYYY-MM-DD — Title`
 - **Changes:** liệt kê thay đổi
 - **Verification:** kết quả verify
 - **Rollback:** cách rollback nếu cần
+
+---
+
+### 2026-09-03 — Bucket `learning-hub`, identity giới hạn, mở S3 cho LAN, pin `-ip` filer
+
+**Operator:** Claude Code + hoangnguyen
+**Ticket/Context:** Learning Hub (BIZ03-edtech-vn) chuyển dữ liệu đề TOEIC, media và sao lưu D1 từ SSD ngoài của Mac mini
+lên promax để dùng chung nhiều máy; đẩy qua LAN bằng rclone (quyết định #31 trong repo learning-hub).
+
+**Changes:**
+
+1. Identity `learning-hub` thêm vào `/etc/seaweedfs/config.json` (backup `config.json.bak-2026-09-03`), quyền
+   `Read/Write/List/Tagging:learning-hub`; restart filer.
+2. Sau restart filer bind sang `100.89.161.125` (Tailscale) vì unit không pin `-ip`; sửa unit thêm
+   `-ip=192.168.0.200` (backup `seaweedfs-filer.service.bak-2026-09-03`), `daemon-reload`, restart.
+3. iptables: chèn `ACCEPT -s 192.168.0.0/24 --dport 8333` trước rule DROP, `iptables-save` vào `rules.v4`.
+4. `s3.bucket.create -name=learning-hub`; `fs.configure -locationPrefix=/buckets/learning-hub -disk=hdd -apply`.
+5. Upload từ Mac mini (`192.168.0.107`) bằng `rclone copy` với `--transfers 8`: `media/` 169 object 220,8 MiB,
+   `toeic-listening-pack/`, `toeic-pred/` (khoảng 2,8 GB).
+
+**Verification:** từ promax `curl http://192.168.0.200:8333/` trả 403; từ Mac mini `rclone lsd lh:` liệt kê bucket,
+`copyto` + `cat` + `deletefile` một file thử thành công; `tcpdump` trước khi sửa cho thấy SYN tới rồi RST.
+
+**Rollback:** khôi phục hai file `.bak-2026-09-03`, `systemctl daemon-reload && systemctl restart seaweedfs-filer`;
+xoá rule bằng `iptables -D INPUT -s 192.168.0.0/24 -p tcp --dport 8333 -j ACCEPT` rồi `iptables-save`;
+bucket xoá theo mục 8 khi dữ liệu đã có nơi khác.
 
 ---
 
