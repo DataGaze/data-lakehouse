@@ -1,6 +1,6 @@
 # PROGRESS — Data Lakehouse
 
-> Auto-generated: 2026-08-05 | Phase: B1.4
+> Auto-generated: 2026-09-06 | Phase: B2.2
 
 ## Tổng quan
 
@@ -12,13 +12,38 @@ Kiến trúc: Bizfly → R2 (SoT) → Bronze SeaweedFS → Silver → Gold Postg
 
 ## Trạng thái hiện tại
 
-- **Phase:** B1.4 (Building, ~25% tổng thể)
-- **Tiến độ tổng:** ADR + docs + Superset đang chạy + Prefect đã gỡ; tầng điều phối, truy vấn,
-  catalog, giám sát đều **chưa có**
-- **Hoạt động gần nhất:** 2026-08-05 — gỡ Prefect toàn hệ thống (9 commit / 8 repo) + khung
-  nâng cấp 6 tầng dựa trên số đo hạ tầng thật
+- **Phase:** B2.2 (Building, ~35% tổng thể)
+- **Tiến độ tổng:** **Tầng truy vấn (T3) đã chạy** — Trino 483 trên LXC 220, ba catalog
+  PostgreSQL, Superset nối lại. Tầng điều phối (Dagster), catalog nghiệp vụ (OpenMetadata) và
+  giám sát vẫn **chưa có**; Iceberg/S3 để giai đoạn 2
+- **Hoạt động gần nhất:** 2026-09-06 — dựng Trino giai đoạn 1 từ đầu đến nghiệm thu
 
 ## Đã hoàn thành
+
+### Trino giai đoạn 1 — tầng truy vấn liên nguồn (2026-09-06)
+- [x] **LXC 220 `trino`** trên promax: Debian 13, IP tĩnh 192.168.0.125, 6 nhân / 16 GB / 40 GB,
+      TUN cho tailnet. Địa chỉ chọn sau khi đo trống bằng cả hai bằng chứng (ping im lặng và
+      `ip neigh` trả FAILED)
+- [x] **Trino 483 native**, không container: tarball GitHub Releases ghim sha256, kèm Temurin
+      JDK 25.0.4.1+1 ghim vào kho `adoptium/temurin25-binaries` — kho **chỉ chứa dòng 25**, nên
+      `apt` không trượt được sang Java 26 mà Trino 483 từ chối chạy
+- [x] **Ba catalog PostgreSQL** qua vai chỉ đọc `trino_ro`: `gold` (`stock_market`, LXC 202),
+      `telemetry` (`llm_logs`, LXC 204), `nocodb` (`nocodb_content` gồm schema `toeic`, LXC 204)
+- [x] **Role ansible đủ năm tệp tasks** trong `OPS01-homelab`, có mục trong `inventory.yml`,
+      `versions.yml` và hai bảng guard của `provision.yml`
+- [x] **Lọc mạng `nftables`**: cổng 8080 chỉ mở cho Superset (205), máy điều khiển ansible và
+      dải tailnet. Trino chưa có xác thực — nợ ghi ở `OPS01-homelab/docs/tech-debt.md` TD-43
+      kèm điều kiện nâng cấp viết sẵn
+- [x] **Superset nối lại**: `trino[sqlalchemy]==0.339.0` vào venv (SQLAlchemy giữ nguyên 1.4.54),
+      ba nguồn `Trino - gold` / `- telemetry` / `- nocodb`
+- [x] **Nghiệm thu bằng máy, 7 phép**: `SHOW CATALOGS` đủ bốn; `daily_ohlcv` đếm 47.024 khớp
+      `psql`; một câu `FULL OUTER JOIN` đọc cả hai cụm (gold 47.024, telemetry 240.786);
+      `CREATE TABLE` bị từ chối; LXC 217 ngoài danh sách nhận `http=000` còn Superset nhận `200`;
+      khởi động lại xanh sau 5 giây; Superset lấy được dữ liệu thật qua Trino
+- [x] Thiết kế: `docs/superpowers/specs/2026-09-06-trino-deployment-design.md`.
+      Kế hoạch: `OPS01-homelab/docs/superpowers/plans/2026-09-06-trino-deployment.md`.
+      Cài đặt: `OPS01-homelab/services/trino/INSTALL.md`
+
 
 ### Gỡ Prefect + chốt hướng Dagster (2026-08-05)
 - [x] **Đo trước khi làm:** Prefect chạy 2026-04-02 → 2026-08-05 với **0 deployment, 0 flow run**
@@ -83,12 +108,12 @@ Kiến trúc: Bizfly → R2 (SoT) → Bronze SeaweedFS → Silver → Gold Postg
 | 3 | Dựng lại Iceberg catalog trên PostgreSQL 204 | chưa — có sẵn `data-infra/iceberg/catalog-schema.sql` |
 | 4 | **Dagster** | chưa — ADR đã chốt hướng, chờ chốt phương án mô hình hóa |
 | 5 | Prometheus + exporter + cảnh báo | chưa |
-| 6 | Trino | chưa — phải chọn nơi chạy vì K3s không còn |
+| 6 | Trino | **xong 2026-09-06** — LXC 220, native, ba catalog PostgreSQL |
 | 7 | OpenMetadata (phương án B) | chưa |
-| 8 | Superset (đang chạy, cần nối lại sau khi có Trino) | một phần |
+| 8 | Superset (đang chạy, cần nối lại sau khi có Trino) | **đã nối lại 2026-09-06** |
 
 ### Còn mở, cần quyết
-- Trino chạy ở đâu khi không còn K3s (chặn bước 6, 8)
+- ~~Trino chạy ở đâu khi không còn K3s~~ — đã đáp 2026-09-06: LXC 220 riêng, cài native
 - Prometheus chạy ở đâu, thu đích nào; cảnh báo gửi đi đâu (chặn bước 5)
 - Retention log 7 hay 30 ngày
 - Tên bucket cho nguồn `messaging` (chặn phần ghi bronze của 01-Tracking)
