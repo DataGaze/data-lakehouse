@@ -159,12 +159,15 @@ vẫn còn, tốt hơn là bỏ nó ra khỏi bảng rồi quên.
 
 Xếp theo giá trị trên công sức, không phải theo mức độ nguy hiểm:
 
-| Ưu tiên | Việc | Vì sao trước |
-|---|---|---|
-| 1 | Đưa `/mnt/hdd/seaweedfs` vào một đường sao lưu | N1 — rẻ nhất khi kho mới 24 GB, đắt dần theo từng tháng |
-| 2 | Chốt retention log 7 hay 30 ngày | N6 — quyết định này định đoạt nhịp tăng lớn nhất đang chạy |
-| 3 | Sửa `ts` rỗng của `cc_events` | N6 — không có nó thì không thi hành được retention vừa chốt |
-| 4 | Job `optimize` + `expire_snapshots` cho Iceberg | N3 — dựng lúc còn một bảng thì rẻ, lúc có trăm bảng thì không |
+| Ưu tiên | Việc | Vì sao trước | Hồ sơ khắc phục |
+|---|---|---|---|
+| 1 | Đưa `/mnt/hdd/seaweedfs` vào một đường sao lưu | N1 — rẻ nhất khi kho mới 24 GB, đắt dần theo từng tháng | TD-46 |
+| 2 | Chốt retention log 7 hay 30 ngày | N6 — quyết định này định đoạt nhịp tăng lớn nhất đang chạy | chưa mở, là câu hỏi còn treo |
+| 3 | Sửa `ts` rỗng của `cc_events` | N6 — không có nó thì không thi hành được retention vừa chốt | chưa mở |
+| 4 | Job `optimize` + `expire_snapshots` cho Iceberg | N3 — dựng lúc còn một bảng thì rẻ, lúc có trăm bảng thì không | TD-47 |
+
+Phương án chi tiết cho từng món — các lựa chọn đã cân, lý do loại, việc cụ thể và điều kiện đóng —
+nằm ở `OPS01-homelab/docs/tech-debt/`. Đừng chép lại vào đây: hai bản sẽ lệch nhau.
 
 ## Related
 
