@@ -116,9 +116,9 @@ Kiến trúc: Bizfly → R2 (SoT) → Bronze SeaweedFS → Silver → Gold Postg
 
 | Thứ tự | Việc | Trạng thái |
 |---|---|---|
-| 0a | Khai lịch `vzdump` toàn bộ LXC, đích **ngoài** `/dev/sda` | chưa — **hiện không có job sao lưu nào** |
-| 0b | `pg_dump` định kỳ cho 204 + 202; sao lưu Vault trên 200 | chưa |
-| 1 | SeaweedFS vào as-code + xác minh khôi phục thật | chưa — đang chạy **không có role ansible** |
+| 0a | Khai lịch `vzdump` toàn bộ LXC, đích **ngoài** `/dev/sda` | **lịch đã có từ 2026-09-04** (`vzdump: daily-guests`, 01:00, keep-daily=7+keep-weekly=4) nhưng đích vẫn Ở TRONG `/dev/sda` — chấp nhận có biết, TD-45 |
+| 0b | `pg_dump` định kỳ cho 204 + 202; sao lưu Vault trên 200 | **xong** — `pggold-backup` 01:44, `pg204-backup` 02:31, Vault trong `offsite-encrypt` 04:21 |
+| 1 | SeaweedFS vào as-code + xác minh khôi phục thật | chưa — không có role ansible, **và không có bản sao nào** (TD-46, đo 2026-09-06) |
 | 2 | Loki + Grafana + agent thu log | chưa |
 | 3 | Dựng lại Iceberg catalog trên PostgreSQL 204 | **xong 2026-09-06** — CSDL `iceberg_catalog`, lược đồ áp tay từ `catalog-schema.sql` |
 | 4 | **Dagster** | chưa — ADR đã chốt hướng, chờ chốt phương án mô hình hóa |
@@ -146,6 +146,11 @@ Kiến trúc: Bizfly → R2 (SoT) → Bronze SeaweedFS → Silver → Gold Postg
 - [ ] PG Gold index: `CREATE INDEX idx_ticks_time ON ticks (tick_time)`
 
 ## Ghi chú
+
+- **Mốc nền tăng trưởng + danh sách chỉ số theo dõi:** `docs/2026-09-06-growth-bottlenecks__ai1.md`
+  (đo 2026-09-06). Sáu điểm nghẽn xếp theo thứ tự sẽ chạm, 14 chỉ số kèm ngưỡng lấy từ mốc nền.
+  Điểm nghẽn số một **không phải dung lượng** (còn 1,2 TB trống) mà là kho đối tượng không có bản
+  sao nào, trong khi catalog Iceberg của nó lại được sao lưu hàng đêm
 
 - **Không có scheduler nào đang chạy.** ETL chỉ chạy khi gọi tay:
   `python -m ingestion.r2_to_bronze --date YYYY-MM-DD` rồi `python -m etl.orchestrator --source stock`
