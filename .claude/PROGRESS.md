@@ -1,6 +1,6 @@
 # PROGRESS — Data Lakehouse
 
-> Auto-generated: 2026-09-06 | Phase: B2.2
+> Auto-generated: 2026-09-06 | Phase: B2.3
 
 ## Tổng quan
 
@@ -12,13 +12,28 @@ Kiến trúc: Bizfly → R2 (SoT) → Bronze SeaweedFS → Silver → Gold Postg
 
 ## Trạng thái hiện tại
 
-- **Phase:** B2.2 (Building, ~35% tổng thể)
-- **Tiến độ tổng:** **Tầng truy vấn (T3) đã chạy** — Trino 483 trên LXC 220, ba catalog
-  PostgreSQL, Superset nối lại. Tầng điều phối (Dagster), catalog nghiệp vụ (OpenMetadata) và
-  giám sát vẫn **chưa có**; Iceberg/S3 để giai đoạn 2
-- **Hoạt động gần nhất:** 2026-09-06 — dựng Trino giai đoạn 1 từ đầu đến nghiệm thu
+- **Phase:** B2.3 (Building, ~40% tổng thể)
+- **Tiến độ tổng:** **Tầng truy vấn (T3) đã chạy đủ hai giai đoạn** — Trino 483 trên LXC 220,
+  ba catalog PostgreSQL chỉ đọc + catalog Iceberg ghi được trên SeaweedFS, Superset nối cả bốn.
+  Tầng điều phối (Dagster), catalog nghiệp vụ (OpenMetadata) và giám sát vẫn **chưa có**
+- **Hoạt động gần nhất:** 2026-09-06 — Trino giai đoạn 2: catalog Iceberg trên SeaweedFS
 
 ## Đã hoàn thành
+
+### Trino giai đoạn 2 — Iceberg trên SeaweedFS (2026-09-06)
+- [x] **Đo trước khi dựng**: bucket `lakehouse` chỉ 24.768 B — Bronze/Silver **rỗng**, dữ liệu
+      thật nằm ở PostgreSQL Gold. Giai đoạn 2 vì thế là dựng **đường ghi**, không phải mở đường
+      đọc hồ sẵn có; tiêu chí nghiệm thu đổi theo
+- [x] **Catalog JDBC trên PostgreSQL 204**, không dựng Hive metastore: CSDL `iceberg_catalog`,
+      vai `iceberg_cat`, lược đồ từ `OPS01-homelab/data-infra/iceberg/catalog-schema.sql`
+- [x] **Kho tệp `s3://lakehouse/warehouse/`** qua `fs.native-s3.enabled`, danh tính SeaweedFS
+      `trino` chỉ có quyền trong đúng bucket `lakehouse` — Trino giờ là bên GHI mà vẫn chưa có
+      xác thực, nên phạm vi hỏng bị chặn ở tầng lưu trữ (TD-43 nâng hạng, TD-44, TD-45)
+- [x] **Vào role ansible**: template `catalog-iceberg.properties.j2`, gate ba bí mật riêng,
+      `trino_expected_catalogs` để healthcheck đòi luôn `iceberg`
+- [x] **Nghiệm thu 6 phép + 2 phép phụ**: CTAS 47.024 dòng từ gold sang Iceberg, đọc lại khớp;
+      Parquet 494.706 B kèm đủ manifest/snapshot/stats trên S3; một câu nối Iceberg (S3) với
+      telemetry (PG 204); Superset chạy được qua nguồn `Trino - iceberg`
 
 ### Trino giai đoạn 1 — tầng truy vấn liên nguồn (2026-09-06)
 - [x] **LXC 220 `trino`** trên promax: Debian 13, IP tĩnh 192.168.0.125, 6 nhân / 16 GB / 40 GB,
@@ -105,15 +120,18 @@ Kiến trúc: Bizfly → R2 (SoT) → Bronze SeaweedFS → Silver → Gold Postg
 | 0b | `pg_dump` định kỳ cho 204 + 202; sao lưu Vault trên 200 | chưa |
 | 1 | SeaweedFS vào as-code + xác minh khôi phục thật | chưa — đang chạy **không có role ansible** |
 | 2 | Loki + Grafana + agent thu log | chưa |
-| 3 | Dựng lại Iceberg catalog trên PostgreSQL 204 | chưa — có sẵn `data-infra/iceberg/catalog-schema.sql` |
+| 3 | Dựng lại Iceberg catalog trên PostgreSQL 204 | **xong 2026-09-06** — CSDL `iceberg_catalog`, lược đồ áp tay từ `catalog-schema.sql` |
 | 4 | **Dagster** | chưa — ADR đã chốt hướng, chờ chốt phương án mô hình hóa |
 | 5 | Prometheus + exporter + cảnh báo | chưa |
-| 6 | Trino | **xong 2026-09-06** — LXC 220, native, ba catalog PostgreSQL |
+| 6 | Trino | **xong 2026-09-06** — LXC 220, native, ba catalog PostgreSQL + catalog Iceberg |
 | 7 | OpenMetadata (phương án B) | chưa |
 | 8 | Superset (đang chạy, cần nối lại sau khi có Trino) | **đã nối lại 2026-09-06** |
 
 ### Còn mở, cần quyết
 - ~~Trino chạy ở đâu khi không còn K3s~~ — đã đáp 2026-09-06: LXC 220 riêng, cài native
+- ~~Đích sao lưu đặt ở đâu~~ — đã đáp 2026-09-06: `/mnt/hdd` trên promax. Chấp nhận **có
+  biết** rằng đó là `/dev/sda`, cùng đĩa vật lý với dữ liệu SeaweedFS, nên chỉ chống được lỗi
+  vận hành chứ không chống được hỏng đĩa. Ghi ở `OPS01-homelab/docs/tech-debt.md` TD-45
 - Prometheus chạy ở đâu, thu đích nào; cảnh báo gửi đi đâu (chặn bước 5)
 - Retention log 7 hay 30 ngày
 - Tên bucket cho nguồn `messaging` (chặn phần ghi bronze của 01-Tracking)

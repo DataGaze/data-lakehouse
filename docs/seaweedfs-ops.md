@@ -189,6 +189,16 @@ Defined in `/etc/seaweedfs/config.json`.
 |---|----------|-------------|---------|---------|
 | 1 | `admin` | All buckets | Admin, Read, Write, List, Tagging | Super admin — ops only, do not share |
 | 2 | `learning-hub` | `learning-hub` only | Read, Write, List, Tagging (bucket-scoped) | rclone remote `lh` on Mac mini (`~/.config/rclone/rclone.conf`, `no_check_bucket = true` because HeadBucket is denied for scoped identities). Added 2026-09-03; Vault entry `infra/seaweedfs/learning-hub` pending (Vault sealed that day) |
+| 3 | `llm-logs` | `llm-logs` only | Read, Write, List, Tagging (bucket-scoped) | CLI agent telemetry pipeline |
+| 4 | `tuyen-dung` | `tuyen-dung` only | Read, Write, List, Tagging (bucket-scoped) | Recruitment workflow attachments |
+| 5 | `trino` | `lakehouse` only | Read, Write, List, Tagging (bucket-scoped) | Trino Iceberg catalog on LXC 220 writes table data and metadata under `lakehouse/warehouse/`. Scoped deliberately: Trino has no authentication (`OPS01-homelab/docs/tech-debt.md` TD-43), so this identity is what keeps a destructive query inside one bucket. Added 2026-09-06; Vault entry pending (Vault still sealed) |
+
+Rows 3 and 4 existed before this table was last written and were missing from it; they are listed
+here from a live read of `/etc/seaweedfs/config.json` on 2026-09-06.
+
+Adding an identity means editing that file and restarting the filer (`systemctl restart
+seaweedfs-filer`), which interrupts S3 for **every** bucket for roughly two seconds — the running
+S3 server reads the file once at startup and does not reload it.
 
 > **TODO:** Create per-project identities with scoped permissions:
 > - `stock-pipeline` → Read/Write `stock-data` only

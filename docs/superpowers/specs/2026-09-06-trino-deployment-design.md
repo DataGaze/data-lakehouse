@@ -256,6 +256,76 @@ làm công cụ Python nhạy locale dừng ngay lúc khởi động.
 | Cổng 8080 không xác thực trong vùng được phép | Trung bình | Lọc mạng mức 1 kèm điều kiện nâng cấp viết sẵn (mục 9) |
 | Tarball 851 MB tải lại mỗi lần provision | Thấp | Tải một lần về `/mnt/hdd/artifacts/trino/` trên promax, giống khuôn đã dùng cho `vaultwarden` |
 
+## 15. Giai đoạn 2 — Iceberg trên SeaweedFS (làm cùng ngày 2026-09-06)
+
+### 15.1 Điều đo được làm đổi hình dạng của giai đoạn 2
+
+Trước khi dựng, đo lại dung lượng thật của từng bucket bằng `weed shell s3.bucket.list`:
+
+| Bucket | Dung lượng | Ghi chú |
+|---|---|---|
+| `lakehouse` | 24.768 B | `bronze/`, `silver/`, `gold/` chỉ có tệp `.keep` và một `test.json` |
+| `stock-data` | 0 B | rỗng |
+| `llm-logs` | 8,68 GB | log tác tử CLI, phân tầng sâu theo `<công cụ>/<máy>/<tháng>/<dự án>` |
+| `project-assets` | 12,89 GB | tệp đính kèm, không phải dữ liệu phân tích |
+| `learning-hub` | 3,27 GB | dữ liệu của một dự án khác |
+
+Nghĩa là **hồ chưa có dữ liệu**: hai tầng Bronze và Silver rỗng, dữ liệu thật đang nằm trong
+PostgreSQL Gold trên LXC 202. Nên giai đoạn 2 không thể là "mở Iceberg để đọc hồ sẵn có" — nó
+chỉ có thể là **dựng đường ghi** để về sau có hồ. Điều đó đổi tiêu chí nghiệm thu: bằng chứng
+phải là một bảng Iceberg do chính Trino tạo ra từ dữ liệu thật, không phải một truy vấn đọc.
+
+### 15.2 Kiến trúc chọn
+
+Catalog JDBC trên PostgreSQL 204, **không** dựng Hive metastore: bớt một dịch vụ phải nuôi, một
+unit phải giám sát, một nguồn hỏng. Kho tệp là SeaweedFS S3 qua `fs.native-s3.enabled`.
+
+| Thành phần | Giá trị | Vì sao |
+|---|---|---|
+| Kiểu catalog | `jdbc` | Không cần Hive metastore; siêu dữ liệu nằm trong CSDL đã có sẵn người trông |
+| CSDL catalog | `iceberg_catalog` trên 192.168.0.119, vai `iceberg_cat` | Cùng cụm với `telemetry`; tách CSDL nên không đụng dữ liệu nghiệp vụ |
+| Kho tệp | `s3://lakehouse/warehouse/` | Để riêng dưới `warehouse/`; gốc bucket đã có `bronze/`, `silver/`, `gold/` theo quy ước cũ |
+| Định dạng | Parquet | Khớp quy ước Bronze/Silver đang khai trong CLAUDE.md của repo |
+| Danh tính S3 | `trino`, phạm vi đúng bucket `lakehouse` | Xem 15.3 |
+
+### 15.3 Iceberg đổi hạng của rủi ro, không đổi lớp bảo vệ
+
+Ba catalog của giai đoạn 1 đều chỉ đọc, nên tình huống xấu nhất qua cổng 8080 là **lộ dữ liệu**.
+Iceberg biến Trino thành bên **ghi**: cùng đường đó giờ `CREATE`, `INSERT` và `DROP` được. Lộ dữ
+liệu và mất dữ liệu không cùng một hạng.
+
+Vì Trino vẫn chưa có xác thực (nợ TD-43, điều kiện nâng cấp đã viết sẵn từ giai đoạn 1), phạm vi
+hỏng được chặn ở **nơi dữ liệu rơi xuống**, không phải nơi truy vấn xuất phát: danh tính S3
+`trino` chỉ có `Read/Write/List/Tagging` trong bucket `lakehouse`, tuyệt đối không dùng `admin`.
+Tình huống xấu nhất do đó gói gọn trong một bucket và một CSDL catalog, không chạm được
+`learning-hub`, `llm-logs`, `project-assets` hay bucket nào khác.
+
+### 15.4 Một cái bẫy đã đo được
+
+Trino **không tự tạo** hai bảng bookkeeping của Iceberg. Truy vấn đầu tiên hỏng với `Cannot check
+and eventually update SQL schema`; nguyên nhân thật nằm sâu ba tầng trong chuỗi ngoại lệ:
+`relation "iceberg_tables" does not exist`. Câu báo lỗi ngoài cùng không nhắc tên bảng lẫn tên
+CSDL nên rất giống lỗi kết nối, mà `SHOW CATALOGS` thì vẫn liệt kê `iceberg` bình thường và
+healthcheck vẫn xanh.
+
+Lược đồ áp bằng tay từ `OPS01-homelab/data-infra/iceberg/catalog-schema.sql`. Role không tạo,
+không kiểm — nợ kỹ thuật TD-44, kèm lý do vì sao chưa gộp vào role.
+
+### 15.5 Nghiệm thu giai đoạn 2 — sáu phép, chạy thật
+
+| # | Phép | Kết quả đo được |
+|---|---|---|
+| 1 | `CREATE SCHEMA iceberg.silver` | `CREATE SCHEMA` |
+| 2 | `CREATE TABLE ... AS SELECT * FROM gold.public.daily_ohlcv` | `CREATE TABLE: 47024 rows` |
+| 3 | Đọc lại từ Iceberg | `47024` — khớp nguồn PostgreSQL |
+| 4 | Tệp thật trên SeaweedFS | `data/` một Parquet 494.706 B; `metadata/` đủ `metadata.json`, manifest `.avro`, snapshot `.avro`, `.stats`. Bucket `lakehouse` từ 24.768 B lên 663.704 B |
+| 5 | Bản ghi trong catalog PG 204 | một dòng trong `iceberg_tables`: catalog `iceberg`, namespace `silver`, bảng `daily_ohlcv`, trỏ `s3://lakehouse/warehouse/silver/daily_ohlcv-81262b3e...` |
+| 6 | Câu đọc Iceberg (S3) nối telemetry (PG 204) | gold 27.561 + 19.463 = 47.024 đọc **từ S3**, telemetry trả số của chính nó — một câu chạm hai tầng lưu trữ khác nhau |
+
+Thêm hai phép phụ: `SELECT snapshot_id, operation FROM iceberg.silver."daily_ohlcv$snapshots"`
+trả đúng một ảnh chụp `append`; và Superset chạy được `SELECT count(*)` qua nguồn
+`Trino - iceberg` bằng chính engine của nó, trả `47024`.
+
 ## Related
 
 - `docs/2026-08-05-lakehouse-upgrade-framework__ai1.md`
