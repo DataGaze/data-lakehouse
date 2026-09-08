@@ -20,7 +20,7 @@ from client import SupersetClient
 
 mcp = FastMCP(
     "superset-mcp",
-    description="Create and manage Superset dashboards, charts, datasets, and run SQL",
+    instructions="Create and manage Superset dashboards, charts, datasets, and run SQL",
 )
 
 _client: SupersetClient | None = None
@@ -147,6 +147,10 @@ def create_chart(
         "row_limit": row_limit,
         "viz_type": viz_type,
     }
+    if viz_type == "pie":
+        if len(params["metrics"]) != 1:
+            raise ValueError("Pie charts require exactly one metric")
+        params["metric"] = params["metrics"][0]
     if groupby:
         params["groupby"] = json.loads(groupby)
     if time_column:
@@ -168,6 +172,17 @@ def create_chart(
         params["order_by_cols"] = json.loads(order_by)
 
     result = get_client().create_chart(name, viz_type, datasource_id, params)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def update_chart(chart_id: int, params: str) -> str:
+    """Update chart parameters, preserving settings not included in the JSON object."""
+    client = get_client()
+    chart = client.get_chart(chart_id)
+    current = json.loads(chart["params"] or "{}")
+    current.update(json.loads(params))
+    result = client._put(f"/api/v1/chart/{chart_id}", {"params": json.dumps(current)})
     return json.dumps(result, indent=2)
 
 
@@ -194,6 +209,16 @@ def create_dashboard(title: str, slug: str = "") -> str:
         slug: URL-friendly slug (optional, auto-generated if empty)
     """
     result = get_client().create_dashboard(title, slug or None)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def update_dashboard(dashboard_id: int, properties: str) -> str:
+    """Update dashboard fields such as position_json, css, and json_metadata.
+
+    properties is a JSON object; fields not included are preserved.
+    """
+    result = get_client().update_dashboard(dashboard_id, json.loads(properties))
     return json.dumps(result, indent=2)
 
 
@@ -227,6 +252,11 @@ def add_charts_to_dashboard(dashboard_id: int, chart_ids: str) -> str:
 
     row_children = []
     for i, cid in enumerate(ids):
+        chart = client.get_chart(cid)
+        dashboard_ids = [dashboard["id"] for dashboard in chart["dashboards"]]
+        if dashboard_id not in dashboard_ids:
+            dashboard_ids.append(dashboard_id)
+            client._put(f"/api/v1/chart/{cid}", {"dashboards": dashboard_ids})
         chart_key = f"CHART-{cid}"
         row_key = f"ROW-{i}"
         position[chart_key] = {
@@ -235,8 +265,8 @@ def add_charts_to_dashboard(dashboard_id: int, chart_ids: str) -> str:
             "meta": {
                 "chartId": cid,
                 "height": 50,
-                "sliceName": f"Chart {cid}",
-                "width": 6,
+                "sliceName": chart["slice_name"],
+                "width": 12,
             },
             "parents": ["ROOT_ID", "GRID_ID", row_key],
             "type": "CHART",

@@ -1,6 +1,6 @@
 # PROGRESS — Data Lakehouse
 
-> Auto-generated: 2026-09-06 | Phase: B2.3
+> Auto-generated: 2026-09-08 | Phase: B2.3
 
 ## Tổng quan
 
@@ -16,9 +16,22 @@ Kiến trúc: Bizfly → R2 (SoT) → Bronze SeaweedFS → Silver → Gold Postg
 - **Tiến độ tổng:** **Tầng truy vấn (T3) đã chạy đủ hai giai đoạn** — Trino 483 trên LXC 220,
   ba catalog PostgreSQL chỉ đọc + catalog Iceberg ghi được trên SeaweedFS, Superset nối cả bốn.
   Tầng điều phối (Dagster), catalog nghiệp vụ (OpenMetadata) và giám sát vẫn **chưa có**
-- **Hoạt động gần nhất:** 2026-09-06 — Trino giai đoạn 2: catalog Iceberg trên SeaweedFS
+- **Hoạt động gần nhất:** 2026-09-08 — cải thiện thiết kế hai dashboard Superset qua REST API và MCP stdio; mỗi bản có sáu chart, số liệu PostgreSQL đối chiếu khớp
 
 ## Đã hoàn thành
+
+### So sánh báo cáo qua API và MCP — 2026-09-08
+
+- [x] Connection `PG Telemetry - Read Only` (ID 6) nối thẳng `llm_logs` bằng vai chỉ đọc hiện có; không đổi lược đồ hay mã hóa database.
+- [x] API: dashboard 1, dataset 1, charts 1–3 và 7–9; MCP: dashboard 2, dataset 2, charts 4–6 và 10–12. Slug và phạm vi dữ liệu trong `docs/superset-mcp.md`.
+- [x] MCP chạy thật qua stdio bằng Python SDK 1.30.0: `initialize`, `tools/list`, `tools/call`; chưa đăng ký thường trực vào Codex. Dùng env conda `global`, thêm hai dependency trực tiếp `mcp` và `httpx`.
+- [x] Sửa ba thiếu sót đã tái hiện: tên tham số khởi tạo FastMCP, quan hệ chart–dashboard, trường `metric` riêng của pie. Thêm `update_chart`; chart mặc định dùng đủ chiều rộng hàng.
+- [x] `POST /api/v1/chart/data` đối chiếu hai dataset: 2 dòng tỷ trọng, 23 dòng xu hướng, 15 dòng dự án khớp; tổng 125.711 bản ghi (Claude Code 102.185, Codex 23.526), khoảng ngày 2026-08-25 đến hết 2026-09-07 theo giờ Việt Nam.
+- [x] Kiểm tra Edge: cả hai dashboard tải đủ biểu đồ tròn, đường và bảng. Test inline đã chạy: khởi tạo MCP, metric pie hợp lệ/rỗng/nhiều phần tử, cập nhật giữ thiết lập cũ, gắn chart giữ dashboard khác và không nhân đôi quan hệ.
+- [x] Thiết kế mới: đầu trang ghi rõ kỳ báo cáo, ba KPI truy vấn thật, donut và đường đặt cạnh nhau, Top 15 dự án hiện số đầy đủ và ô tìm kiếm, chú giải nguồn cuối trang. Hai bản cùng thiết kế và kỳ dữ liệu cố định theo giả định phục vụ so sánh API/MCP.
+- [x] Thêm `update_dashboard` để MCP lưu bố cục, CSS và metadata; 12 tool được SDK liệt kê, cập nhật thật thành công. Test inline kiểm tra payload giữ nguyên, CSS rỗng, không thay trường ngoài yêu cầu và JSON không hợp lệ.
+- [x] Đo lại qua `POST /api/v1/chart/data`: ba KPI mỗi bản lần lượt 125.711, 102.185, 23.526; tổng khớp hai thành phần. Ba phép đối chiếu tỷ trọng/xu hướng/dự án vẫn khớp. Edge hiển thị sáu chart mỗi bản, không tràn ngang, chú giải không bị cắt.
+- **Giới hạn đo được:** `SHOW server_encoding` của `superset_meta` trả `SQL_ASCII`; demo dùng tiêu đề tiếng Anh. Chuỗi tiếng Việt gây lỗi ở đường tạo chart/truy vấn; việc sửa mã hóa chưa thực hiện.
 
 ### Trino giai đoạn 2 — Iceberg trên SeaweedFS (2026-09-06)
 - [x] **Đo trước khi dựng**: bucket `lakehouse` chỉ 24.768 B — Bronze/Silver **rỗng**, dữ liệu
